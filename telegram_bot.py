@@ -10,7 +10,6 @@ from openai import OpenAI
 # 本機可讀 .env；Railway 主要讀環境變數
 load_dotenv()
 
-# 除錯：印出相關環境變數 key
 debug_keys = [k for k in os.environ.keys() if "TELEGRAM" in k or "OPENAI" in k]
 print("DEBUG ENV KEYS:", debug_keys)
 
@@ -37,6 +36,11 @@ def load_inventory():
         return {}
     with open(INVENTORY_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def save_inventory(inventory):
+    with open(INVENTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(inventory, f, indent=2, ensure_ascii=False)
 
 
 def inventory_text(inventory):
@@ -94,6 +98,79 @@ def get_updates(offset=None):
     return response.json()
 
 
+def parse_qty(qty_text):
+    try:
+        return float(qty_text)
+    except ValueError:
+        return None
+
+
+def format_number(value):
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def ensure_location_and_item(inventory, location, item):
+    if location not in inventory:
+        inventory[location] = {}
+
+    if item not in inventory[location]:
+        inventory[location][item] = {
+            "數量": 0,
+            "低庫存門檻": 1,
+            "單位": "個"
+        }
+
+
+def handle_inventory_update(text, inventory):
+    parts = text.split()
+
+    if len(parts) < 4:
+        return False, "格式錯誤，請用：\n新增 大順家 尿布 1\n使用 南屏家 尿布 0.5"
+
+    action = parts[0]
+    location = parts[1]
+    qty_text = parts[-1]
+    item = " ".join(parts[2:-1])
+
+    qty = parse_qty(qty_text)
+    if qty is None:
+        return False, "數量格式錯誤，請輸入數字，例如 1 或 0.5"
+
+    if qty <= 0:
+        return False, "數量必須大於 0"
+
+    ensure_location_and_item(inventory, location, item)
+
+    current_qty = inventory[location][item].get("數量", 0)
+    unit = inventory[location][item].get("單位", "個")
+
+    if action == "新增":
+        inventory[location][item]["數量"] = current_qty + qty
+        save_inventory(inventory)
+        return True, (
+            f"已新增 {location} 的 {item} {format_number(qty)}{unit}\n"
+            f"目前數量：{format_number(inventory[location][item]['數量'])}{unit}"
+        )
+
+    if action == "使用":
+        if qty > current_qty:
+            return False, (
+                f"{location} 的 {item} 庫存不足\n"
+                f"目前只有：{format_number(current_qty)}{unit}"
+            )
+
+        inventory[location][item]["數量"] = current_qty - qty
+        save_inventory(inventory)
+        return True, (
+            f"已使用 {location} 的 {item} {format_number(qty)}{unit}\n"
+            f"剩餘數量：{format_number(inventory[location][item]['數量'])}{unit}"
+        )
+
+    return False, "不支援的操作。"
+
+
 def handle_text_message(chat_id, text):
     inventory = load_inventory()
 
@@ -104,13 +181,22 @@ def handle_text_message(chat_id, text):
             "查看庫存\n"
             "購買建議\n"
             "今日提醒\n"
-            "本週重點"
+            "本週重點\n\n"
+            "庫存操作：\n"
+            "新增 大順家 尿布 1\n"
+            "使用 南屏家 尿布 0.5\n"
+            "新增 外出用品 濕紙巾隨身包 2"
         )
         send_message(chat_id, reply)
         return
 
     if text == "查看庫存":
         send_message(chat_id, inventory_text(inventory))
+        return
+
+    if text.startswith("新增 ") or text.startswith("使用 "):
+        success, message = handle_inventory_update(text, inventory)
+        send_message(chat_id, message)
         return
 
     if text == "購買建議":
@@ -198,7 +284,15 @@ def handle_text_message(chat_id, text):
 
     send_message(
         chat_id,
-        "目前支援的指令有：\n- 查看庫存\n- 購買建議\n- 今日提醒\n- 本週重點"
+        "目前支援的指令有：\n"
+        "- 查看庫存\n"
+        "- 購買建議\n"
+        "- 今日提醒\n"
+        "- 本週重點\n\n"
+        "庫存操作：\n"
+        "- 新增 大順家 尿布 1\n"
+        "- 使用 南屏家 尿布 0.5\n"
+        "- 新增 外出用品 濕紙巾隨身包 2"
     )
 
 
