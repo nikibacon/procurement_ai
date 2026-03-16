@@ -7,11 +7,18 @@ import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# 本機會讀 .env；Railway 會直接讀環境變數
+# 本機可讀 .env；Railway 主要讀環境變數
 load_dotenv()
+
+# 除錯：印出相關環境變數 key
+debug_keys = [k for k in os.environ.keys() if "TELEGRAM" in k or "OPENAI" in k]
+print("DEBUG ENV KEYS:", debug_keys)
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+print("DEBUG TELEGRAM_TOKEN exists:", bool(TELEGRAM_TOKEN))
+print("DEBUG OPENAI_API_KEY exists:", bool(OPENAI_API_KEY))
 
 if not TELEGRAM_TOKEN:
     raise ValueError("找不到 TELEGRAM_TOKEN，請確認 Railway Variables 或 .env 有設定。")
@@ -19,7 +26,7 @@ if not TELEGRAM_TOKEN:
 if not OPENAI_API_KEY:
     raise ValueError("找不到 OPENAI_API_KEY，請確認 Railway Variables 或 .env 有設定。")
 
-client = OpenAI()
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 INVENTORY_FILE = Path("inventory.json")
@@ -196,8 +203,6 @@ def handle_text_message(chat_id, text):
 
 
 def main():
-    print("TELEGRAM_TOKEN exists:", bool(TELEGRAM_TOKEN))
-    print("OPENAI_API_KEY exists:", bool(OPENAI_API_KEY))
     print("Telegram Bot 啟動中（requests 版）...")
 
     offset = None
