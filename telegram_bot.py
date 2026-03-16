@@ -7,16 +7,17 @@ import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 
+# 本機會讀 .env；Railway 會直接讀環境變數
 load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not TELEGRAM_TOKEN:
-    raise ValueError("找不到 TELEGRAM_TOKEN，請確認 .env 有設定。")
+    raise ValueError("找不到 TELEGRAM_TOKEN，請確認 Railway Variables 或 .env 有設定。")
 
 if not OPENAI_API_KEY:
-    raise ValueError("找不到 OPENAI_API_KEY，請確認 .env 有設定。")
+    raise ValueError("找不到 OPENAI_API_KEY，請確認 Railway Variables 或 .env 有設定。")
 
 client = OpenAI()
 
@@ -39,10 +40,12 @@ def inventory_text(inventory):
 
     for location, items in inventory.items():
         lines.append(f"\n【{location}】")
+
         for item_name, item_data in items.items():
             qty = item_data.get("數量", 0)
             unit = item_data.get("單位", "個")
             threshold = item_data.get("低庫存門檻", 0)
+
             lines.append(f"- {item_name}：{qty}{unit}（低庫存門檻：{threshold}{unit}）")
 
             subareas = item_data.get("子區域", {})
@@ -69,14 +72,13 @@ def send_message(chat_id, text):
         "chat_id": chat_id,
         "text": text,
     }
-    requests.post(url, json=payload, timeout=30)
+    response = requests.post(url, json=payload, timeout=30)
+    response.raise_for_status()
 
 
 def get_updates(offset=None):
     url = f"{BASE_URL}/getUpdates"
-    params = {
-        "timeout": 20,
-    }
+    params = {"timeout": 20}
     if offset is not None:
         params["offset"] = offset
 
@@ -106,6 +108,7 @@ def handle_text_message(chat_id, text):
 
     if text == "購買建議":
         summary = inventory_text(inventory)
+
         system_prompt = f"""
 你是一個家庭採購助理。
 
@@ -134,6 +137,7 @@ def handle_text_message(chat_id, text):
 
     if text == "今日提醒":
         summary = inventory_text(inventory)
+
         system_prompt = f"""
 你是一個家庭生活助理。
 
@@ -158,6 +162,7 @@ def handle_text_message(chat_id, text):
 
     if text == "本週重點":
         summary = inventory_text(inventory)
+
         system_prompt = f"""
 你是一個家庭生活與採購助理。
 
