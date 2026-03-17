@@ -39,6 +39,7 @@ def ask_vision_with_image(image_path):
                     "辨識結果：xxx\n"
                     "信心：高/中/低\n"
                     "建議品項名稱：xxx\n"
+                    "候選品項：1. xxx 2. xxx（如有多個可能）\n"
                     "建議操作：新增 地點 品項 數量"
                 ),
             },
